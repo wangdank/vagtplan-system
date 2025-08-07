@@ -1,4 +1,564 @@
-<!DOCTYPE html>
+                console.log('\n📅 Parser ' + weekInfo.weekKey + ' (kolonne ' + weekInfo.startCol + '-' + (weekInfo.startCol + 6) + ')');
+                
+                // Parser hver medarbejder for denne uge
+                for (var r = 0; r < jsonData.length; r++) {
+                    var row = jsonData[r];
+                    if (row[0] && typeof row[0] === 'string') {
+                        var employeeName = row[0].toString().trim();
+                        
+                        if (validEmployees.indexOf(employeeName) !== -1) {
+                            var weekShifts = [];
+                            
+                            // Hent de 7 dage for denne uge
+                            for (var dayOffset = 0; dayOffset < 7; dayOffset++) {
+                                var colIndex = weekInfo.startCol + dayOffset;
+                                var cellValue = row[colIndex] || '';
+                                
+                                // Rens data
+                                if (typeof cellValue === 'number') {
+                                    cellValue = ''; // Skip Excel datoer
+                                } else if (typeof cellValue === 'string') {
+                                    cellValue = cellValue.trim();
+                                } else {
+                                    cellValue = '';
+                                }
+                                
+                                weekShifts.push(cellValue);
+                                
+                                if (cellValue) {
+                                    hasAnyData = true;
+                                }
+                            }
+                            
+                            weekData[employeeName] = weekShifts;
+                            console.log('  ' + employeeName + ': [' + weekShifts.join(', ') + ']');
+                        }
+                    }
+                }
+                
+                // Tilføj kun uger med data
+                if (hasAnyData) {
+                    newAllWeeksData[weekInfo.weekKey] = weekData;
+                    importedWeeks.push(weekInfo.weekNumber);
+                    console.log('✅ ' + weekInfo.weekKey + ' importeret');
+                } else {
+                    console.log('⚠️ ' + weekInfo.weekKey + ' sprunget over (ingen data)');
+                }
+            }
+            
+            // Opdater global data
+            if (Object.keys(newAllWeeksData).length > 0) {
+                // Merge med eksisterende data
+                for (var key in newAllWeeksData) {
+                    allWeeksData[key] = newAllWeeksData[key];
+                }
+                
+                // Opdater available weeks
+                for (var i = 0; i < importedWeeks.length; i++) {
+                    if (availableWeeks.indexOf(importedWeeks[i]) === -1) {
+                        availableWeeks.push(importedWeeks[i]);
+                    }
+                }
+                availableWeeks.sort(function(a, b) { return a - b; });
+                
+                console.log('🎉 Import completed!');
+                console.log('📅 Tilgængelige uger:', availableWeeks);
+                console.log('📊 Total antal uger:', Object.keys(allWeeksData).length);
+                
+                return {
+                    success: true,
+                    importedWeeks: importedWeeks,
+                    totalWeeks: Object.keys(allWeeksData).length
+                };
+            } else {
+                console.error('❌ Ingen data kunne importeres');
+                return { success: false, error: 'Ingen gyldig data fundet' };
+            }
+        }
+
+        // Hent data for den aktuelle uge
+        function getCurrentWeekData() {
+            var weekKey = currentYear + '-W' + currentWeek;
+            if (allWeeksData[weekKey]) {
+                return allWeeksData[weekKey];
+            }
+            
+            // Hvis der ikke er data for denne uge, returner standard tomme data
+            var emptyWeek = {};
+            for (var i = 0; i < employees.length; i++) {
+                emptyWeek[employees[i]] = ['', '', '', '', '', '', ''];
+            }
+            return emptyWeek;
+        }
+
+        // Gem data for den aktuelle uge
+        function saveCurrentWeekData() {
+            var weekKey = currentYear + '-W' + currentWeek;
+            allWeeksData[weekKey] = JSON.parse(JSON.stringify(scheduleData)); // Deep copy
+        }
+
+        // Vis import status
+        function showImportStatus(result) {
+            var statusDiv = document.getElementById('importStatus');
+            var statusText = document.getElementById('importStatusText');
+            
+            if (result.success) {
+                statusText.innerHTML = 
+                    '<strong>✅ Import successful!</strong><br>' +
+                    '📅 Importerede uger: ' + result.importedWeeks.join(', ') + '<br>' +
+                    '📊 Total uger i systemet: ' + result.totalWeeks + '<br>' +
+                    '🗓️ Brug uge-navigation eller knapperne nedenfor for at skifte mellem uger';
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = '#f0f9ff';
+                statusDiv.style.borderLeftColor = '#0ea5e9';
+            } else {
+                statusText.innerHTML = '<strong>❌ Import fejlede:</strong><br>' + result.error;
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = '#fef2f2';
+                statusDiv.style.borderLeftColor = '#ef4444';
+            }
+        }
+
+        // Opret knapper for alle tilgængelige uger
+        function createWeekButtons() {
+            if (availableWeeks.length === 0) return;
+            
+            var selectorDiv = document.getElementById('weekSelector');
+            var buttonsDiv = document.getElementById('weekButtons');
+            
+            buttonsDiv.innerHTML = '';
+            
+            for (var i = 0; i < availableWeeks.length; i++) {
+                var weekNum = availableWeeks[i];
+                var button = document.createElement('button');
+                button.textContent = 'Uge ' + weekNum;
+                button.onclick = function(wn) {
+                    return function() { jumpToWeek(wn); };
+                }(weekNum);
+                
+                var isActive = weekNum === currentWeek;
+                button.style.cssText = 
+                    'padding: 8px 15px;' +
+                    'margin: 2px;' +
+                    'border: 2px solid #e2e8f0;' +
+                    'border-radius: 6px;' +
+                    'background: ' + (isActive ? '#4f46e5' : 'white') + ';' +
+                    'color: ' + (isActive ? 'white' : '#374151') + ';' +
+                    'cursor: pointer;' +
+                    'font-size: 0.8rem;' +
+                    'font-weight: 600;' +
+                    'transition: all 0.2s;';
+                
+                button.onmouseover = function(wn) {
+                    return function() {
+                        if (wn !== currentWeek) {
+                            this.style.background = '#f3f4f6';
+                        }
+                    };
+                }(weekNum);
+                
+                button.onmouseout = function(wn) {
+                    return function() {
+                        if (wn !== currentWeek) {
+                            this.style.background = 'white';
+                        }
+                    };
+                }(weekNum);
+                
+                buttonsDiv.appendChild(button);
+            }
+            
+            selectorDiv.style.display = 'block';
+        }
+
+        // Spring til specifik uge
+        function jumpToWeek(weekNumber) {
+            var oldWeek = currentWeek;
+            
+            // Gem nuværende uge data før skift
+            saveCurrentWeekData();
+            
+            // Skift til ny uge
+            currentWeek = weekNumber;
+            updateWeekDisplay();
+            renderSchedule();
+            
+            // Opdater uge-knapper
+            createWeekButtons();
+            
+            console.log('🔄 Skiftede fra uge ' + oldWeek + ' til uge ' + weekNumber);
+            showNotification('📅 Skiftede til uge ' + weekNumber);
+        }
+
+        function getShiftClass(shift) {
+            if (!shift || shift === '') return 'shift-empty';
+            if (shift.indexOf('08:00') !== -1 && shift.indexOf('16:00') !== -1) return 'shift-morning';
+            if (shift.indexOf('08:00') !== -1 && (shift.indexOf('14:00') !== -1 || shift.indexOf('17:00') !== -1)) return 'shift-morning';
+            if (shift.indexOf('14:00') !== -1 || shift.indexOf('10:00-22:00') !== -1) return 'shift-evening';
+            if (shift.indexOf('22:00') !== -1 || shift.indexOf('BAGVAGT') !== -1) return 'shift-night';
+            if (shift === 'FRI' || shift === 'VAGTFRI') return 'shift-free';
+            if (shift === 'FERIE') return 'shift-vacation';
+            if (shift === 'SYGDOM') return 'shift-sick';
+            return 'shift-special';
+        }
+
+        function renderSchedule() {
+            // Hent data for den aktuelle uge
+            scheduleData = getCurrentWeekData();
+            
+            var tbody = document.getElementById('scheduleBody');
+            tbody.innerHTML = '';
+
+            for (var e = 0; e < employees.length; e++) {
+                var employee = employees[e];
+                var row = document.createElement('tr');
+                
+                // Medarbejder navn
+                var nameCell = document.createElement('td');
+                nameCell.textContent = employee;
+                row.appendChild(nameCell);
+
+                // Daglige vagter
+                for (var dayIndex = 0; dayIndex < 7; dayIndex++) {
+                    var cell = document.createElement('td');
+                    var shift = scheduleData[employee] ? scheduleData[employee][dayIndex] : '';
+                    
+                    var shiftDiv = document.createElement('div');
+                    shiftDiv.className = 'shift-cell ' + getShiftClass(shift);
+                    shiftDiv.textContent = shift || 'Ikke planlagt';
+                    shiftDiv.onclick = function(emp, day, div) {
+                        return function() { toggleCellSelection(emp, day, div); };
+                    }(employee, dayIndex, shiftDiv);
+                    shiftDiv.dataset.employee = employee;
+                    shiftDiv.dataset.day = dayIndex;
+                    
+                    cell.appendChild(shiftDiv);
+                    row.appendChild(cell);
+                }
+                
+                tbody.appendChild(row);
+            }
+
+            updateSummary();
+            autoSave();
+        }
+
+        function toggleCellSelection(employee, dayIndex, element) {
+            var cellId = employee + '-' + dayIndex;
+            
+            if (selectedCells.has(cellId)) {
+                selectedCells.delete(cellId);
+                element.classList.remove('selected');
+            } else {
+                selectedCells.add(cellId);
+                element.classList.add('selected');
+            }
+            
+            updateButtonStates();
+        }
+
+        function applyShiftToSelected() {
+            var selectedShift = document.getElementById('shiftSelect').value;
+            if (!selectedShift || selectedCells.size === 0) return;
+            
+            var count = selectedCells.size;
+            selectedCells.forEach(function(cellId) {
+                var parts = cellId.split('-');
+                var employee = parts[0];
+                var dayIndex = parts[1];
+                scheduleData[employee][parseInt(dayIndex)] = selectedShift;
+            });
+            
+            // Gem ændringerne for denne uge
+            saveCurrentWeekData();
+            
+            clearSelection();
+            renderSchedule();
+            showNotification('Opdateret ' + count + ' vagter til: ' + selectedShift);
+        }
+
+        function clearSelectedCells() {
+            if (selectedCells.size === 0) return;
+            
+            var count = selectedCells.size;
+            selectedCells.forEach(function(cellId) {
+                var parts = cellId.split('-');
+                var employee = parts[0];
+                var dayIndex = parts[1];
+                scheduleData[employee][parseInt(dayIndex)] = '';
+            });
+            
+            // Gem ændringerne for denne uge
+            saveCurrentWeekData();
+            
+            clearSelection();
+            renderSchedule();
+            showNotification('Ryddet ' + count + ' vagter');
+        }
+
+        function clearSelection() {
+            var selectedElements = document.querySelectorAll('.shift-cell.selected');
+            for (var i = 0; i < selectedElements.length; i++) {
+                selectedElements[i].classList.remove('selected');
+            }
+            selectedCells.clear();
+            updateButtonStates();
+        }
+
+        function updateSummary() {
+            var summaryGrid = document.getElementById('summaryGrid');
+            summaryGrid.innerHTML = '';
+
+            // Statistikker per person
+            for (var e = 0; e < employees.length; e++) {
+                var employee = employees[e];
+                var shifts = scheduleData[employee] || [];
+                var workDays = 0;
+                var freeDays = 0;
+                var vacationDays = 0;
+                
+                for (var s = 0; s < shifts.length; s++) {
+                    var shift = shifts[s];
+                    if (shift && ['FRI', 'FERIE', 'VAGTFRI', 'SYGDOM'].indexOf(shift) === -1) {
+                        workDays++;
+                    } else if (['FRI', 'VAGTFRI'].indexOf(shift) !== -1) {
+                        freeDays++;
+                    } else if (shift === 'FERIE') {
+                        vacationDays++;
+                    }
+                }
+                
+                var card = document.createElement('div');
+                card.className = 'summary-card';
+                card.innerHTML = 
+                    '<h4>' + employee + '</h4>' +
+                    '<div class="stats">' +
+                        '<span>Arbejdsdage: ' + workDays + '</span>' +
+                        '<span>Fridage: ' + freeDays + '</span>' +
+                        '<span>Ferie: ' + vacationDays + '</span>' +
+                    '</div>';
+                summaryGrid.appendChild(card);
+            }
+        }
+
+        function previousWeek() {
+            saveCurrentWeekData();
+            
+            currentWeek--;
+            if (currentWeek < 1) {
+                currentWeek = 52;
+                currentYear--;
+            }
+            updateWeekDisplay();
+            renderSchedule();
+            createWeekButtons();
+            autoSave();
+        }
+
+        function nextWeek() {
+            saveCurrentWeekData();
+            
+            currentWeek++;
+            if (currentWeek > 52) {
+                currentWeek = 1;
+                currentYear++;
+            }
+            updateWeekDisplay();
+            renderSchedule();
+            createWeekButtons();
+            autoSave();
+        }
+
+        function updateWeekDisplay() {
+            document.getElementById('currentWeek').textContent = 'Uge ' + currentWeek + ', ' + currentYear;
+            
+            // Opdater datoer i tabeloverskrifter
+            var headers = document.querySelectorAll('th');
+            for (var i = 1; i < headers.length; i++) {
+                var dayName = days[i - 1];
+                var date = getDateFromWeek(currentYear, currentWeek, i - 1);
+                headers[i].innerHTML = dayName + '<br><span style="font-size:0.8em; opacity:0.8;">' + date + '</span>';
+            }
+        }
+
+        function getDateFromWeek(year, week, dayOfWeek) {
+            var date = new Date(year, 0, 1 + (week - 1) * 7);
+            date.setDate(date.getDate() - date.getDay() + 1 + dayOfWeek);
+            return date.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
+        }
+
+        // Export til Excel
+        function exportToExcel() {
+            showLoading(true);
+            
+            try {
+                // Opbyg data array til Excel
+                var excelData = [];
+                
+                // Header række
+                var headerRow = ['Medarbejder'];
+                for (var d = 0; d < days.length; d++) {
+                    headerRow.push(days[d]);
+                }
+                excelData.push(headerRow);
+                
+                // Data rækker
+                for (var e = 0; e < employees.length; e++) {
+                    var employee = employees[e];
+                    var row = [employee];
+                    var employeeShifts = scheduleData[employee] || [];
+                    for (var s = 0; s < employeeShifts.length; s++) {
+                        row.push(employeeShifts[s]);
+                    }
+                    excelData.push(row);
+                }
+                
+                // Opret workbook og worksheet
+                var wb = XLSX.utils.book_new();
+                var ws = XLSX.utils.aoa_to_sheet(excelData);
+                
+                // Stil kolonne bredder
+                ws['!cols'] = [
+                    { width: 15 }
+                ];
+                for (var i = 0; i < 7; i++) {
+                    ws['!cols'].push({ width: 18 });
+                }
+                
+                // Tilføj worksheet til workbook
+                XLSX.utils.book_append_sheet(wb, ws, 'Uge ' + currentWeek);
+                
+                // Download fil
+                var filename = 'Vagtplan_Uge' + currentWeek + '_' + currentYear + '.xlsx';
+                XLSX.writeFile(wb, filename);
+                
+                showNotification('Excel fil downloadet! 📥');
+            } catch (error) {
+                console.error('Export fejl:', error);
+                showNotification('Fejl ved export til Excel', true);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function exportToPDF() {
+            window.print();
+        }
+
+        function copyToClipboard() {
+            var text = 'Vagtplan Uge ' + currentWeek + ', ' + currentYear + '\n\n';
+            text += 'Medarbejder\t' + days.join('\t') + '\n';
+            
+            for (var e = 0; e < employees.length; e++) {
+                var employee = employees[e];
+                var shifts = scheduleData[employee] || [];
+                text += employee + '\t' + shifts.join('\t') + '\n';
+            }
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(function() {
+                    showNotification('Vagtplan kopieret til clipboard! 📋');
+                }).catch(function() {
+                    showNotification('Kunne ikke kopiere til clipboard', true);
+                });
+            } else {
+                showNotification('Clipboard ikke understøttet i denne browser', true);
+            }
+        }
+
+        // Auto-save funktionalitet
+        function autoSave() {
+            try {
+                var dataToSave = {
+                    allWeeksData: allWeeksData,
+                    availableWeeks: availableWeeks,
+                    currentWeek: currentWeek,
+                    currentYear: currentYear,
+                    lastSaved: new Date().toISOString()
+                };
+                localStorage.setItem('vagtplan_multiweek_data', JSON.stringify(dataToSave));
+                updateLastSaved();
+            } catch (error) {
+                console.error('Auto-save fejl:', error);
+            }
+        }
+
+        // Auto-load funktionalitet
+        function autoLoad() {
+            var saved = localStorage.getItem('vagtplan_multiweek_data');
+            if (saved) {
+                try {
+                    var data = JSON.parse(saved);
+                    allWeeksData = data.allWeeksData || {};
+                    availableWeeks = data.availableWeeks || [];
+                    currentWeek = data.currentWeek || currentWeek;
+                    currentYear = data.currentYear || currentYear;
+                    
+                    console.log('Multi-week data loaded:', {
+                        weeks: Object.keys(allWeeksData).length,
+                        availableWeeks: availableWeeks,
+                        currentWeek: currentWeek
+                    });
+                    
+                    // Opret uge-knapper hvis der er importerede uger
+                    if (availableWeeks.length > 0) {
+                        setTimeout(function() { createWeekButtons(); }, 100);
+                    }
+                    
+                } catch (error) {
+                    console.error('Fejl ved loading af saved data:', error);
+                }
+            }
+            
+            // Initialize hvis der ikke er data
+            initializeMultiWeekData();
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl/Cmd + S for save (export)
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                exportToExcel();
+            }
+            
+            // Escape to clear selection
+            if (e.key === 'Escape') {
+                clearSelection();
+            }
+            
+            // Delete to clear selected cells
+            if (e.key === 'Delete' && selectedCells.size > 0) {
+                clearSelectedCells();
+            }
+        });
+
+        // Initialize app ved page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set GitHub link to current repository
+            var currentUrl = window.location.hostname;
+            if (currentUrl.indexOf('github.io') !== -1) {
+                var pathParts = window.location.pathname.split('/');
+                var repoName = pathParts[1];
+                var username = currentUrl.split('.')[0];
+                document.getElementById('githubLink').href = 'https://github.com/' + username + '/' + repoName;
+            }
+            
+            // Initialize multi-week system
+            initializeMultiWeekData();
+            autoLoad();
+            updateWeekDisplay();
+            renderSchedule();
+            updateButtonStates();
+            
+            console.log('🗓️ Multi-Week Vagtplan System loaded!');
+            console.log('💾 Data auto-saves all weeks to localStorage');
+            console.log('📅 Available weeks:', availableWeeks);
+            console.log('⌨️ Keyboard shortcuts: Ctrl+S (export), Escape (clear selection), Delete (clear cells)');
+        });
+    </script>
+</body>
+</html><!DOCTYPE html>
 <html lang="da">
 <head>
     <meta charset="UTF-8">
@@ -355,6 +915,8 @@
             transform: translateX(100%);
             transition: transform 0.3s;
             z-index: 1000;
+            max-width: 300px;
+            white-space: pre-line;
         }
 
         .notification.show {
@@ -487,6 +1049,7 @@
                     <option value="VAGTFRI">Vagtfri</option>
                     <option value="SYGDOM">Sygemelding</option>
                     <option value="BAGVAGT">Bagvagt</option>
+                    <option value="ERSTAT-FRI">Erstat-fri</option>
                 </select>
             </div>
 
@@ -577,22 +1140,26 @@
             </div>
             
             <br>
-            <small style="color: #64748b;">💡 Upload jeres komplette Excel vagtplan - alle uger importeres automatiskt</small>
+            <small style="color: #64748b;">💡 Upload jeres komplette Excel vagtplan - alle uger importeres automatisk</small>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
         // Data struktur
-        const employees = ['Ammad', 'Andreas', 'Kåre', 'Karsten', 'Sofia', 'Malte'];
-        const days = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
+        var employees = ['Ammad', 'Andreas', 'Kåre', 'Karsten', 'Sofia', 'Malte'];
+        var days = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
         
-        let currentWeek = 32;
-        let currentYear = 2025;
-        let selectedCells = new Set();
+        var currentWeek = 32;
+        var currentYear = 2025;
+        var selectedCells = new Set();
         
-        // Vagtplan data - startdata baseret på jeres nuværende plan
-        let scheduleData = {
+        // Multi-uge data struktur
+        var allWeeksData = {};
+        var availableWeeks = [];
+        
+        // Vagtplan data for den aktuelle uge
+        var scheduleData = {
             'Ammad': ['FERIE', '08:00-16:00', 'VAGTFRI', 'VAGTFRI', 'VAGTFRI', '10:00-22:00', '10:00-22:00'],
             'Andreas': ['VAGTFRI', '08:00-16:00', '08:00-16:00', '08:00-16:00', '08:00-16:00', 'FRI', 'FRI'],
             'Kåre': ['08:00-16:00', '08:00-16:00', '08:00-16:00', '08:00-16:00', '08:00-16:00', 'FRI', 'FRI'],
@@ -601,20 +1168,32 @@
             'Malte': ['14:00-22:00', '14:00-22:00', '08:00-16:00', '08:00-16:00', '08:00-16:00', '10:00-22:00', 'VAGTFRI']
         };
 
-        // Utility functions
-        function showNotification(message, isError = false) {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.className = `notification ${isError ? 'error' : ''}`;
-            notification.classList.add('show');
-            
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 3000);
+        // Initialize multi-week data
+        function initializeMultiWeekData() {
+            var weekKey = currentYear + '-W' + currentWeek;
+            if (!allWeeksData[weekKey]) {
+                allWeeksData[weekKey] = JSON.parse(JSON.stringify(scheduleData)); // Deep copy
+            }
         }
 
-        function showLoading(show = true) {
-            const overlay = document.getElementById('loadingOverlay');
+        // Utility functions
+        function showNotification(message, isError) {
+            if (isError === undefined) isError = false;
+            
+            var notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = 'notification' + (isError ? ' error' : '');
+            notification.classList.add('show');
+            
+            setTimeout(function() {
+                notification.classList.remove('show');
+            }, 4000);
+        }
+
+        function showLoading(show) {
+            if (show === undefined) show = true;
+            
+            var overlay = document.getElementById('loadingOverlay');
             if (show) {
                 overlay.classList.add('show');
             } else {
@@ -623,291 +1202,46 @@
         }
 
         function updateLastSaved() {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('da-DK', { 
+            var now = new Date();
+            var timeString = now.toLocaleTimeString('da-DK', { 
                 hour: '2-digit', 
                 minute: '2-digit' 
             });
-            document.getElementById('lastSaved').textContent = `Sidst gemt: ${timeString}`;
+            document.getElementById('lastSaved').textContent = 'Sidst gemt: ' + timeString;
         }
 
         function updateButtonStates() {
-            const hasSelection = selectedCells.size > 0;
+            var hasSelection = selectedCells.size > 0;
             document.getElementById('updateBtn').disabled = !hasSelection;
             document.getElementById('clearBtn').disabled = !hasSelection;
         }
 
-        // Import fra Excel med bedre fejlhåndtering
-        async function importFromExcel(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            showLoading(true);
-            console.log('🔄 Starter Excel import...');
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-                        header: 1, 
-                        defval: "",
-                        range: "A1:Z30"  // Udvidet range for at fange flere kolonner
-                    });
-
-                    console.log('📊 Excel data indlæst, antal rækker:', jsonData.length);
-                    
-                    // Debug: Vis de første par rækker
-                    console.log('🔍 Første 5 rækker:');
-                    for (let i = 0; i < Math.min(5, jsonData.length); i++) {
-                        console.log(`R${i+1}:`, jsonData[i].slice(0, 15));
-                    }
-
-                    // Parse Excel data tilbage til vores format
-                    const success = parseExcelData(jsonData);
-                    
-                    if (success) {
-                        renderSchedule();
-                        showNotification('Excel fil importeret successfully! 🎉\n\nData indlæst for: ' + Object.keys(scheduleData).filter(emp => scheduleData[emp].some(v => v)).join(', '));
-                        
-                        // Debug info til konsol
-                        console.log('📋 Aktuel scheduleData:', scheduleData);
-                    } else {
-                        showNotification('Import delvist successful, men nogle medarbejdere mangler data. Check Excel filens format.', true);
-                    }
-                    
-                } catch (error) {
-                    console.error('❌ Import fejl:', error);
-                    showNotification('Der opstod en fejl ved import af Excel filen.\n\nTjek:\n• Filen er .xlsx format\n• Medarbejdernavne er i kolonne A\n• Vagtdata starter i kolonne B', true);
-                } finally {
-                    showLoading(false);
-                    // Reset file input
-                    event.target.value = '';
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        // Global variable til at holde alle ugers data
-        let allWeeksData = {};
-        let availableWeeks = [];
-        
-        // Multi-uge data struktur
-        function initializeMultiWeekData() {
-            // Start med standard data for den aktuelle uge
-            if (!allWeeksData[`${currentYear}-W${currentWeek}`]) {
-                allWeeksData[`${currentYear}-W${currentWeek}`] = {
-                    'Ammad': ['FERIE', '08:00-16:00', 'VAGTFRI', 'VAGTFRI', 'VAGTFRI', '10:00-22:00', '10:00-22:00'],
-                    'Andreas': ['VAGTFRI', '08:00-16:00', '08:00-16:00', '08:00-16:00', '08:00-16:00', 'FRI', 'FRI'],
-                    'Kåre': ['08:00-16:00', '08:00-16:00', '08:00-16:00', '08:00-16:00', '08:00-16:00', 'FRI', 'FRI'],
-                    'Karsten': ['08:00-16:00', '08:00-16:00', '08:00-16:00', '08:00-16:00', '08:00-16:00', 'FRI', 'FRI'],
-                    'Sofia': ['08:00-14:00', '08:00-14:00', '14:00-22:00', '14:00-22:00', '08:00-16:00', 'FRI', 'FRI'],
-                    'Malte': ['14:00-22:00', '14:00-22:00', '08:00-16:00', '08:00-16:00', '08:00-16:00', '10:00-22:00', 'VAGTFRI']
-                };
-            }
-        }
-
-        // Import hele Excel filen med alle uger
-        function parseAllWeeksFromExcel(jsonData) {
-            console.log('📅 Importerer alle uger fra Excel...');
-            
-            const validEmployees = ['Ammad', 'Andreas', 'Kåre', 'Karsten', 'Sofia', 'Malte'];
-            const newAllWeeksData = {};
-            const importedWeeks = [];
-            
-            // Find uge headers i første række
-            const headerRow = jsonData[0] || [];
-            const weekPositions = [];
-            
-            headerRow.forEach((cell, index) => {
-                if (cell && typeof cell === 'string' && cell.includes('Uge ')) {
-                    const weekNum = cell.match(/Uge (\d+)/);
-                    if (weekNum) {
-                        weekPositions.push({
-                            weekNumber: parseInt(weekNum[1]),
-                            startCol: index,
-                            weekKey: `${currentYear}-W${weekNum[1]}`
-                        });
-                    }
-                }
-            });
-            
-            console.log('📊 Fundne uger:', weekPositions);
-            
-            // Hvis ingen uge headers, dan standard positions
-            if (weekPositions.length === 0) {
-                // Antag standard layout: hver uge starter hver 8. kolonne
-                for (let i = 1; i < 30; i += 8) {
-                    weekPositions.push({
-                        weekNumber: Math.floor(i / 8) + 2,
-                        startCol: i,
-                        weekKey: `${currentYear}-W${Math.floor(i / 8) + 2}`
-                    });
-                    if (weekPositions.length >= 6) break; // Max 6 uger
-                }
-            }
-            
-            // Parse data for hver uge
-            weekPositions.forEach(weekInfo => {
-                const weekData = {};
-                let hasAnyData = false;
-                
-                console.log(`\n📅 Parser ${weekInfo.weekKey} (kolonne ${weekInfo.startCol}-${weekInfo.startCol + 6})`);
-                
-                // Parser hver medarbejder for denne uge
-                jsonData.forEach((row, rowIndex) => {
-                    if (row[0] && typeof row[0] === 'string') {
-                        const employeeName = row[0].trim();
-                        
-                        if (validEmployees.includes(employeeName)) {
-                            const weekShifts = [];
-                            
-                            // Hent de 7 dage for denne uge
-                            for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-                                const colIndex = weekInfo.startCol + dayOffset;
-                                let cellValue = row[colIndex] || '';
-                                
-                                // Rens data
-                                if (typeof cellValue === 'number') {
-                                    cellValue = ''; // Skip Excel datoer
-                                } else if (typeof cellValue === 'string') {
-                                    cellValue = cellValue.trim();
-                                } else {
-                                    cellValue = '';
-                                }
-                                
-                                weekShifts.push(cellValue);
-                                
-                                if (cellValue) {
-                                    hasAnyData = true;
-                                }
-                            }
-                            
-                            weekData[employeeName] = weekShifts;
-                            console.log(`  ${employeeName}: [${weekShifts.join(', ')}]`);
-                        }
-                    }
-                });
-                
-                // Tilføj kun uger med data
-                if (hasAnyData) {
-                    newAllWeeksData[weekInfo.weekKey] = weekData;
-                    importedWeeks.push(weekInfo.weekNumber);
-                    console.log(`✅ ${weekInfo.weekKey} importeret`);
-                } else {
-                    console.log(`⚠️ ${weekInfo.weekKey} sprunget over (ingen data)`);
-                }
-            });
-            
-            // Opdater global data
-            if (Object.keys(newAllWeeksData).length > 0) {
-                allWeeksData = { ...allWeeksData, ...newAllWeeksData };
-                availableWeeks = [...new Set([...availableWeeks, ...importedWeeks])].sort((a, b) => a - b);
-                
-                console.log('🎉 Import completed!');
-                console.log('📅 Tilgængelige uger:', availableWeeks);
-                console.log('📊 Total antal uger:', Object.keys(allWeeksData).length);
-                
-                return {
-                    success: true,
-                    importedWeeks: importedWeeks,
-                    totalWeeks: Object.keys(allWeeksData).length
-                };
-            } else {
-                console.error('❌ Ingen data kunne importeres');
-                return { success: false, error: 'Ingen gyldig data fundet' };
-            }
-        }
-
-        // Hent data for den aktuelle uge
-        function getCurrentWeekData() {
-            const weekKey = `${currentYear}-W${currentWeek}`;
-            if (allWeeksData[weekKey]) {
-                return allWeeksData[weekKey];
-            }
-            
-            // Hvis der ikke er data for denne uge, returner standard tomme data
-            const emptyWeek = {};
-            employees.forEach(emp => {
-                emptyWeek[emp] = ['', '', '', '', '', '', ''];
-            });
-            return emptyWeek;
-        }
-
-        // Gem data for den aktuelle uge
-        function saveCurrentWeekData() {
-            const weekKey = `${currentYear}-W${currentWeek}`;
-            allWeeksData[weekKey] = { ...scheduleData };
-        }
-
-        // Opdateret renderSchedule funktion
-        function renderSchedule() {
-            // Hent data for den aktuelle uge
-            scheduleData = getCurrentWeekData();
-            
-            const tbody = document.getElementById('scheduleBody');
-            tbody.innerHTML = '';
-
-            employees.forEach(employee => {
-                const row = document.createElement('tr');
-                
-                // Medarbejder navn
-                const nameCell = document.createElement('td');
-                nameCell.textContent = employee;
-                row.appendChild(nameCell);
-
-                // Daglige vagter
-                for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
-                    const cell = document.createElement('td');
-                    const shift = scheduleData[employee] ? scheduleData[employee][dayIndex] : '';
-                    
-                    const shiftDiv = document.createElement('div');
-                    shiftDiv.className = `shift-cell ${getShiftClass(shift)}`;
-                    shiftDiv.textContent = shift || 'Ikke planlagt';
-                    shiftDiv.onclick = () => toggleCellSelection(employee, dayIndex, shiftDiv);
-                    shiftDiv.dataset.employee = employee;
-                    shiftDiv.dataset.day = dayIndex;
-                    
-                    cell.appendChild(shiftDiv);
-                    row.appendChild(cell);
-                }
-                
-                tbody.appendChild(row);
-            });
-
-            updateSummary();
-            autoSave();
-        }
-
-        // Import fra Excel - nu importerer ALLE uger
-        async function importFromExcel(event) {
-            const file = event.target.files[0];
+        // Import fra Excel - importerer ALLE uger
+        function importFromExcel(event) {
+            var file = event.target.files[0];
             if (!file) return;
 
             showLoading(true);
             console.log('🔄 Starter komplet Excel import...');
 
-            const reader = new FileReader();
+            var reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+                    var data = new Uint8Array(e.target.result);
+                    var workbook = XLSX.read(data, { type: 'array' });
+                    var worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    var jsonData = XLSX.utils.sheet_to_json(worksheet, { 
                         header: 1, 
                         defval: "",
-                        range: "A1:AZ30"  // Stort range for at fange alle kolonner
+                        range: "A1:AZ30"
                     });
 
                     console.log('📊 Excel data indlæst, antal rækker:', jsonData.length);
                     
                     // Import alle uger
-                    const result = parseAllWeeksFromExcel(jsonData);
+                    var result = parseAllWeeksFromExcel(jsonData);
                     
                     if (result.success) {
-                        // Opdater UI
                         renderSchedule();
                         showImportStatus(result);
                         createWeekButtons();
@@ -935,529 +1269,51 @@
             reader.readAsArrayBuffer(file);
         }
 
-        // Vis import status
-        function showImportStatus(result) {
-            const statusDiv = document.getElementById('importStatus');
-            const statusText = document.getElementById('importStatusText');
+        // Parse alle uger fra Excel
+        function parseAllWeeksFromExcel(jsonData) {
+            console.log('📅 Importerer alle uger fra Excel...');
             
-            if (result.success) {
-                statusText.innerHTML = 
-                    '<strong>✅ Import successful!</strong><br>' +
-                    '📅 Importerede uger: ' + result.importedWeeks.join(', ') + '<br>' +
-                    '📊 Total uger i systemet: ' + result.totalWeeks + '<br>' +
-                    '🗓️ Brug uge-navigation eller knapperne nedenfor for at skifte mellem uger';
-                statusDiv.style.display = 'block';
-                statusDiv.style.background = '#f0f9ff';
-                statusDiv.style.borderLeftColor = '#0ea5e9';
-            } else {
-                statusText.innerHTML = '<strong>❌ Import fejlede:</strong><br>' + result.error;
-                statusDiv.style.display = 'block';
-                statusDiv.style.background = '#fef2f2';
-                statusDiv.style.borderLeftColor = '#ef4444';
-            }
-        }
-
-        // Opret knapper for alle tilgængelige uger
-        function createWeekButtons() {
-            if (availableWeeks.length === 0) return;
+            var validEmployees = ['Ammad', 'Andreas', 'Kåre', 'Karsten', 'Sofia', 'Malte'];
+            var newAllWeeksData = {};
+            var importedWeeks = [];
             
-            const selectorDiv = document.getElementById('weekSelector');
-            const buttonsDiv = document.getElementById('weekButtons');
+            // Find uge headers i første række
+            var headerRow = jsonData[0] || [];
+            var weekPositions = [];
             
-            buttonsDiv.innerHTML = '';
-            
-            availableWeeks.forEach(weekNum => {
-                const button = document.createElement('button');
-                button.textContent = `Uge ${weekNum}`;
-                button.onclick = function() { jumpToWeek(weekNum); };
-                button.style.cssText = 
-                    'padding: 8px 15px;' +
-                    'margin: 2px;' +
-                    'border: 2px solid #e2e8f0;' +
-                    'border-radius: 6px;' +
-                    'background: ' + (weekNum === currentWeek ? '#4f46e5' : 'white') + ';' +
-                    'color: ' + (weekNum === currentWeek ? 'white' : '#374151') + ';' +
-                    'cursor: pointer;' +
-                    'font-size: 0.8rem;' +
-                    'font-weight: 600;' +
-                    'transition: all 0.2s;';
-                
-                button.onmouseover = function() {
-                    if (weekNum !== currentWeek) {
-                        button.style.background = '#f3f4f6';
+            for (var i = 0; i < headerRow.length; i++) {
+                var cell = headerRow[i];
+                if (cell && typeof cell === 'string' && cell.indexOf('Uge ') !== -1) {
+                    var weekMatch = cell.match(/Uge (\d+)/);
+                    if (weekMatch) {
+                        weekPositions.push({
+                            weekNumber: parseInt(weekMatch[1]),
+                            startCol: i + 1, // Vagter starter en kolonne til højre for "Uge X"
+                            weekKey: currentYear + '-W' + weekMatch[1]
+                        });
                     }
-                };
-                
-                button.onmouseout = function() {
-                    if (weekNum !== currentWeek) {
-                        button.style.background = 'white';
-                    }
-                };
-                
-                buttonsDiv.appendChild(button);
-            });
-            
-            selectorDiv.style.display = 'block';
-        }
-
-        // Spring til specifik uge
-        function jumpToWeek(weekNumber) {
-            const oldWeek = currentWeek;
-            
-            // Gem nuværende uge data før skift
-            saveCurrentWeekData();
-            
-            // Skift til ny uge
-            currentWeek = weekNumber;
-            updateWeekDisplay();
-            renderSchedule();
-            
-            // Opdater uge-knapper
-            createWeekButtons();
-            
-            console.log('🔄 Skiftede fra uge ' + oldWeek + ' til uge ' + weekNumber);
-            showNotification('📅 Skiftede til uge ' + weekNumber);
-        }
-
-        // Opdateret week navigation
-        function previousWeek() {
-            saveCurrentWeekData(); // Gem før skift
-            
-            currentWeek--;
-            if (currentWeek < 1) {
-                currentWeek = 52;
-                currentYear--;
+                }
             }
-            updateWeekDisplay();
-            renderSchedule();
-            createWeekButtons(); // Opdater knapper
-            autoSave();
-        }
-
-        function nextWeek() {
-            saveCurrentWeekData(); // Gem før skift
             
-            currentWeek++;
-            if (currentWeek > 52) {
-                currentWeek = 1;
-                currentYear++;
-            }
-            updateWeekDisplay();
-            renderSchedule();
-            createWeekButtons(); // Opdater knapper
-            autoSave();
-        }
-
-        // Opdateret auto-save der gemmer alle ugers data
-        function autoSave() {
-            try {
-                const dataToSave = {
-                    allWeeksData,
-                    availableWeeks,
-                    currentWeek,
-                    currentYear,
-                    lastSaved: new Date().toISOString()
-                };
-                localStorage.setItem('vagtplan_multiweek_data', JSON.stringify(dataToSave));
-                updateLastSaved();
-            } catch (error) {
-                console.error('Auto-save fejl:', error);
-            }
-        }
-
-        // Opdateret auto-load
-        function autoLoad() {
-            const saved = localStorage.getItem('vagtplan_multiweek_data');
-            if (saved) {
-                try {
-                    const data = JSON.parse(saved);
-                    allWeeksData = data.allWeeksData || {};
-                    availableWeeks = data.availableWeeks || [];
-                    currentWeek = data.currentWeek || currentWeek;
-                    currentYear = data.currentYear || currentYear;
-                    
-                    console.log('Multi-week data loaded:', {
-                        weeks: Object.keys(allWeeksData).length,
-                        availableWeeks,
-                        currentWeek
+            console.log('📊 Fundne uger:', weekPositions);
+            
+            // Hvis ingen uge headers, dan standard positions baseret på layout
+            if (weekPositions.length === 0) {
+                // Fra analysen ved vi at uge 2 starter i kolonne 1, uge 3 i kolonne 8, osv.
+                var weekStartColumns = [1, 8, 15, 22, 29, 36];
+                for (var w = 0; w < weekStartColumns.length; w++) {
+                    weekPositions.push({
+                        weekNumber: w + 2,
+                        startCol: weekStartColumns[w],
+                        weekKey: currentYear + '-W' + (w + 2)
                     });
-                    
-                    // Opret uge-knapper hvis der er importerede uger
-                    if (availableWeeks.length > 0) {
-                        setTimeout(() => createWeekButtons(), 100);
-                    }
-                    
-                } catch (error) {
-                    console.error('Fejl ved loading af saved data:', error);
                 }
             }
             
-            // Initialize hvis der ikke er data
-            initializeMultiWeekData();
-        } => scheduleData[emp].some(v => v)).join(', ')}`);
-                } else {
-                    showNotification('Import fejlede - tjek Excel filens format', true);
-                }
+            // Parse data for hver uge
+            for (var w = 0; w < weekPositions.length; w++) {
+                var weekInfo = weekPositions[w];
+                var weekData = {};
+                var hasAnyData = false;
                 
-            } catch (error) {
-                console.error('❌ Import fejl:', error);
-                showNotification('Der opstod en fejl ved import', true);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Export til Excel
-        function exportToExcel() {
-            showLoading(true);
-            
-            try {
-                // Opbyg data array til Excel
-                const excelData = [];
-                
-                // Header række
-                excelData.push(['Medarbejder', ...days]);
-                
-                // Data rækker
-                employees.forEach(employee => {
-                    const row = [employee, ...scheduleData[employee]];
-                    excelData.push(row);
-                });
-                
-                // Opret workbook og worksheet
-                const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.aoa_to_sheet(excelData);
-                
-                // Stil kolonne bredder
-                ws['!cols'] = [
-                    { width: 15 }, // Medarbejder kolonne
-                    ...Array(7).fill({ width: 18 }) // Dag kolonner
-                ];
-                
-                // Tilføj styling til headers
-                const headerStyle = {
-                    font: { bold: true },
-                    fill: { fgColor: { rgb: "4F46E5" } },
-                    alignment: { horizontal: "center" }
-                };
-                
-                // Anvend styling på header række
-                for (let col = 0; col < 8; col++) {
-                    const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
-                    if (ws[cellRef]) {
-                        ws[cellRef].s = headerStyle;
-                    }
-                }
-                
-                // Tilføj worksheet til workbook
-                XLSX.utils.book_append_sheet(wb, ws, `Uge ${currentWeek}`);
-                
-                // Download fil
-                const filename = `Vagtplan_Uge${currentWeek}_${currentYear}.xlsx`;
-                XLSX.writeFile(wb, filename);
-                
-                showNotification('Excel fil downloadet! 📥');
-            } catch (error) {
-                console.error('Export fejl:', error);
-                showNotification('Fejl ved export til Excel', true);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Auto-save funktionalitet
-        function autoSave() {
-            try {
-                const dataToSave = {
-                    scheduleData,
-                    currentWeek,
-                    currentYear,
-                    lastSaved: new Date().toISOString()
-                };
-                localStorage.setItem('vagtplan_data', JSON.stringify(dataToSave));
-                updateLastSaved();
-            } catch (error) {
-                console.error('Auto-save fejl:', error);
-            }
-        }
-
-        // Auto-load funktionalitet
-        function autoLoad() {
-            const saved = localStorage.getItem('vagtplan_data');
-            if (saved) {
-                try {
-                    const data = JSON.parse(saved);
-                    scheduleData = data.scheduleData || scheduleData;
-                    currentWeek = data.currentWeek || currentWeek;
-                    currentYear = data.currentYear || currentYear;
-                    
-                    console.log('Data loaded from localStorage:', data.lastSaved);
-                } catch (error) {
-                    console.error('Fejl ved loading af saved data:', error);
-                }
-            }
-        }
-
-        function getShiftClass(shift) {
-            if (!shift || shift === '') return 'shift-empty';
-            if (shift.includes('08:00') && shift.includes('16:00')) return 'shift-morning';
-            if (shift.includes('08:00') && (shift.includes('14:00') || shift.includes('17:00'))) return 'shift-morning';
-            if (shift.includes('14:00') || shift.includes('10:00-22:00')) return 'shift-evening';
-            if (shift.includes('22:00') || shift.includes('BAGVAGT')) return 'shift-night';
-            if (shift === 'FRI' || shift === 'VAGTFRI') return 'shift-free';
-            if (shift === 'FERIE') return 'shift-vacation';
-            if (shift === 'SYGDOM') return 'shift-sick';
-            return 'shift-special';
-        }
-
-        function renderSchedule() {
-            const tbody = document.getElementById('scheduleBody');
-            tbody.innerHTML = '';
-
-            employees.forEach(employee => {
-                const row = document.createElement('tr');
-                
-                // Medarbejder navn
-                const nameCell = document.createElement('td');
-                nameCell.textContent = employee;
-                row.appendChild(nameCell);
-
-                // Daglige vagter
-                for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
-                    const cell = document.createElement('td');
-                    const shift = scheduleData[employee][dayIndex];
-                    
-                    const shiftDiv = document.createElement('div');
-                    shiftDiv.className = `shift-cell ${getShiftClass(shift)}`;
-                    shiftDiv.textContent = shift || 'Ikke planlagt';
-                    shiftDiv.onclick = () => toggleCellSelection(employee, dayIndex, shiftDiv);
-                    shiftDiv.dataset.employee = employee;
-                    shiftDiv.dataset.day = dayIndex;
-                    
-                    cell.appendChild(shiftDiv);
-                    row.appendChild(cell);
-                }
-                
-                tbody.appendChild(row);
-            });
-
-            updateSummary();
-            autoSave(); // Auto-save ved hver ændring
-        }
-
-        function toggleCellSelection(employee, dayIndex, element) {
-            const cellId = `${employee}-${dayIndex}`;
-            
-            if (selectedCells.has(cellId)) {
-                selectedCells.delete(cellId);
-                element.classList.remove('selected');
-            } else {
-                selectedCells.add(cellId);
-                element.classList.add('selected');
-            }
-            
-            updateButtonStates();
-        }
-
-        function applyShiftToSelected() {
-            const selectedShift = document.getElementById('shiftSelect').value;
-            if (!selectedShift || selectedCells.size === 0) return;
-            
-            selectedCells.forEach(cellId => {
-                const [employee, dayIndex] = cellId.split('-');
-                scheduleData[employee][parseInt(dayIndex)] = selectedShift;
-            });
-            
-            clearSelection();
-            renderSchedule();
-            showNotification(`Opdateret ${selectedCells.size} vagter til: ${selectedShift}`);
-        }
-
-        function clearSelectedCells() {
-            if (selectedCells.size === 0) return;
-            
-            const count = selectedCells.size;
-            selectedCells.forEach(function(cellId) {
-                const parts = cellId.split('-');
-                const employee = parts[0];
-                const dayIndex = parts[1];
-                scheduleData[employee][parseInt(dayIndex)] = '';
-            });
-            
-            clearSelection();
-            renderSchedule();
-            showNotification('Ryddet ' + count + ' vagter');
-        }
-
-        function clearSelection() {
-            document.querySelectorAll('.shift-cell.selected').forEach(cell => {
-                cell.classList.remove('selected');
-            });
-            selectedCells.clear();
-            updateButtonStates();
-        }
-
-        function updateSummary() {
-            const summaryGrid = document.getElementById('summaryGrid');
-            summaryGrid.innerHTML = '';
-
-            // Statistikker per person
-            employees.forEach(employee => {
-                const shifts = scheduleData[employee];
-                const workDays = shifts.filter(s => s && !['FRI', 'FERIE', 'VAGTFRI', 'SYGDOM'].includes(s)).length;
-                const freeDays = shifts.filter(s => ['FRI', 'VAGTFRI'].includes(s)).length;
-                const vacationDays = shifts.filter(s => s === 'FERIE').length;
-                
-                const card = document.createElement('div');
-                card.className = 'summary-card';
-                card.innerHTML = `
-                    <h4>${employee}</h4>
-                    <div class="stats">
-                        <span>Arbejdsdage: ${workDays}</span>
-                        <span>Fridage: ${freeDays}</span>
-                        <span>Ferie: ${vacationDays}</span>
-                    </div>
-                `;
-                summaryGrid.appendChild(card);
-            });
-        }
-
-        function previousWeek() {
-            currentWeek--;
-            if (currentWeek < 1) {
-                currentWeek = 52;
-                currentYear--;
-            }
-            updateWeekDisplay();
-            autoSave();
-        }
-
-        function nextWeek() {
-            currentWeek++;
-            if (currentWeek > 52) {
-                currentWeek = 1;
-                currentYear++;
-            }
-            updateWeekDisplay();
-            autoSave();
-        }
-
-        function updateWeekDisplay() {
-            document.getElementById('currentWeek').textContent = `Uge ${currentWeek}, ${currentYear}`;
-            
-            // Opdater datoer i tabeloverskrifter
-            const headers = document.querySelectorAll('th');
-            for (let i = 1; i < headers.length; i++) {
-                const dayName = days[i - 1];
-                const date = getDateFromWeek(currentYear, currentWeek, i - 1);
-                headers[i].innerHTML = `${dayName}<br><span style="font-size:0.8em; opacity:0.8;">${date}</span>`;
-            }
-        }
-
-        function getDateFromWeek(year, week, dayOfWeek) {
-            const date = new Date(year, 0, 1 + (week - 1) * 7);
-            date.setDate(date.getDate() - date.getDay() + 1 + dayOfWeek);
-            return date.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
-        }
-
-        function exportToPDF() {
-            window.print();
-        }
-
-        function copyToClipboard() {
-            let text = `Vagtplan Uge ${currentWeek}, ${currentYear}\n\n`;
-            text += `Medarbejder\t${days.join('\t')}\n`;
-            
-            employees.forEach(employee => {
-                text += `${employee}\t${scheduleData[employee].join('\t')}\n`;
-            });
-            
-            navigator.clipboard.writeText(text).then(() => {
-                showNotification('Vagtplan kopieret til clipboard! 📋');
-            }).catch(() => {
-                showNotification('Kunne ikke kopiere til clipboard', true);
-            });
-        }
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', function(e) {
-            // Ctrl/Cmd + S for save (export)
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                e.preventDefault();
-                exportToExcel();
-            }
-            
-            // Escape to clear selection
-            if (e.key === 'Escape') {
-                clearSelection();
-            }
-            
-            // Delete to clear selected cells
-            if (e.key === 'Delete' && selectedCells.size > 0) {
-                clearSelectedCells();
-            }
-        });
-
-        // Opdateret applyShiftToSelected og clearSelectedCells der gemmer ændringer
-        function applyShiftToSelected() {
-            const selectedShift = document.getElementById('shiftSelect').value;
-            if (!selectedShift || selectedCells.size === 0) return;
-            
-            const count = selectedCells.size;
-            selectedCells.forEach(function(cellId) {
-                const parts = cellId.split('-');
-                const employee = parts[0];
-                const dayIndex = parts[1];
-                scheduleData[employee][parseInt(dayIndex)] = selectedShift;
-            });
-            
-            // Gem ændringerne for denne uge
-            saveCurrentWeekData();
-            
-            clearSelection();
-            renderSchedule();
-            showNotification('Opdateret ' + count + ' vagter til: ' + selectedShift);
-        }
-
-        function clearSelectedCells() {
-            if (selectedCells.size === 0) return;
-            
-            const count = selectedCells.size;
-            selectedCells.forEach(cellId => {
-                const [employee, dayIndex] = cellId.split('-');
-                scheduleData[employee][parseInt(dayIndex)] = '';
-            });
-            
-            // Gem ændringerne for denne uge
-            saveCurrentWeekData();
-            
-            clearSelection();
-            renderSchedule();
-            showNotification(`Ryddet ${count} vagter`);
-        }
-
-        // Initialize app ved page load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Set GitHub link to current repository (update this with your actual GitHub URL)
-            const currentUrl = window.location.hostname;
-            if (currentUrl.includes('github.io')) {
-                const repoName = window.location.pathname.split('/')[1];
-                const username = currentUrl.split('.')[0];
-                document.getElementById('githubLink').href = `https://github.com/${username}/${repoName}`;
-            }
-            
-            // Initialize multi-week system
-            initializeMultiWeekData();
-            autoLoad(); // Load saved data
-            updateWeekDisplay();
-            renderSchedule();
-            updateButtonStates();
-            
-            console.log('🗓️ Multi-Week Vagtplan System loaded!');
-            console.log('💾 Data auto-saves all weeks to localStorage');
-            console.log('📅 Available weeks:', availableWeeks);
-            console.log('⌨️ Keyboard shortcuts: Ctrl+S (export), Escape (clear selection), Delete (clear cells)');
-        });
-    </script>
-</body>
-</html>
+                console.log('\n📅 Parser ' + weekInfo.weekKey + ' (kolonne ' + weekInfo.startCol
