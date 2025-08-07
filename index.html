@@ -913,15 +913,15 @@
                         createWeekButtons();
                         
                         showNotification(
-                            `🎉 Excel import successful!\n\n` +
-                            `📅 Importerede ${result.importedWeeks.length} uger: ${result.importedWeeks.join(', ')}\n` +
-                            `📊 Total ${result.totalWeeks} uger tilgængelige\n\n` +
-                            `Brug uge-navigation for at se forskellige uger!`
+                            '🎉 Excel import successful!\n\n' +
+                            '📅 Importerede ' + result.importedWeeks.length + ' uger: ' + result.importedWeeks.join(', ') + '\n' +
+                            '📊 Total ' + result.totalWeeks + ' uger tilgængelige\n\n' +
+                            'Brug uge-navigation for at se forskellige uger!'
                         );
                         
                         console.log('✅ Komplet Excel import fuldført');
                     } else {
-                        showNotification(`Import fejlede: ${result.error}`, true);
+                        showNotification('Import fejlede: ' + result.error, true);
                     }
                     
                 } catch (error) {
@@ -941,17 +941,16 @@
             const statusText = document.getElementById('importStatusText');
             
             if (result.success) {
-                statusText.innerHTML = `
-                    <strong>✅ Import successful!</strong><br>
-                    📅 Importerede uger: ${result.importedWeeks.join(', ')}<br>
-                    📊 Total uger i systemet: ${result.totalWeeks}<br>
-                    🗓️ Brug uge-navigation eller knapperne nedenfor for at skifte mellem uger
-                `;
+                statusText.innerHTML = 
+                    '<strong>✅ Import successful!</strong><br>' +
+                    '📅 Importerede uger: ' + result.importedWeeks.join(', ') + '<br>' +
+                    '📊 Total uger i systemet: ' + result.totalWeeks + '<br>' +
+                    '🗓️ Brug uge-navigation eller knapperne nedenfor for at skifte mellem uger';
                 statusDiv.style.display = 'block';
                 statusDiv.style.background = '#f0f9ff';
                 statusDiv.style.borderLeftColor = '#0ea5e9';
             } else {
-                statusText.innerHTML = `<strong>❌ Import fejlede:</strong><br>${result.error}`;
+                statusText.innerHTML = '<strong>❌ Import fejlede:</strong><br>' + result.error;
                 statusDiv.style.display = 'block';
                 statusDiv.style.background = '#fef2f2';
                 statusDiv.style.borderLeftColor = '#ef4444';
@@ -970,27 +969,26 @@
             availableWeeks.forEach(weekNum => {
                 const button = document.createElement('button');
                 button.textContent = `Uge ${weekNum}`;
-                button.onclick = () => jumpToWeek(weekNum);
-                button.style.cssText = `
-                    padding: 8px 15px;
-                    margin: 2px;
-                    border: 2px solid #e2e8f0;
-                    border-radius: 6px;
-                    background: ${weekNum === currentWeek ? '#4f46e5' : 'white'};
-                    color: ${weekNum === currentWeek ? 'white' : '#374151'};
-                    cursor: pointer;
-                    font-size: 0.8rem;
-                    font-weight: 600;
-                    transition: all 0.2s;
-                `;
+                button.onclick = function() { jumpToWeek(weekNum); };
+                button.style.cssText = 
+                    'padding: 8px 15px;' +
+                    'margin: 2px;' +
+                    'border: 2px solid #e2e8f0;' +
+                    'border-radius: 6px;' +
+                    'background: ' + (weekNum === currentWeek ? '#4f46e5' : 'white') + ';' +
+                    'color: ' + (weekNum === currentWeek ? 'white' : '#374151') + ';' +
+                    'cursor: pointer;' +
+                    'font-size: 0.8rem;' +
+                    'font-weight: 600;' +
+                    'transition: all 0.2s;';
                 
-                button.onmouseover = () => {
+                button.onmouseover = function() {
                     if (weekNum !== currentWeek) {
                         button.style.background = '#f3f4f6';
                     }
                 };
                 
-                button.onmouseout = () => {
+                button.onmouseout = function() {
                     if (weekNum !== currentWeek) {
                         button.style.background = 'white';
                     }
@@ -1017,8 +1015,8 @@
             // Opdater uge-knapper
             createWeekButtons();
             
-            console.log(`🔄 Skiftede fra uge ${oldWeek} til uge ${weekNumber}`);
-            showNotification(`📅 Skiftede til uge ${weekNumber}`);
+            console.log('🔄 Skiftede fra uge ' + oldWeek + ' til uge ' + weekNumber);
+            showNotification('📅 Skiftede til uge ' + weekNumber);
         }
 
         // Opdateret week navigation
@@ -1279,14 +1277,16 @@
             if (selectedCells.size === 0) return;
             
             const count = selectedCells.size;
-            selectedCells.forEach(cellId => {
-                const [employee, dayIndex] = cellId.split('-');
+            selectedCells.forEach(function(cellId) {
+                const parts = cellId.split('-');
+                const employee = parts[0];
+                const dayIndex = parts[1];
                 scheduleData[employee][parseInt(dayIndex)] = '';
             });
             
             clearSelection();
             renderSchedule();
-            showNotification(`Ryddet ${count} vagter`);
+            showNotification('Ryddet ' + count + ' vagter');
         }
 
         function clearSelection() {
@@ -1404,8 +1404,10 @@
             if (!selectedShift || selectedCells.size === 0) return;
             
             const count = selectedCells.size;
-            selectedCells.forEach(cellId => {
-                const [employee, dayIndex] = cellId.split('-');
+            selectedCells.forEach(function(cellId) {
+                const parts = cellId.split('-');
+                const employee = parts[0];
+                const dayIndex = parts[1];
                 scheduleData[employee][parseInt(dayIndex)] = selectedShift;
             });
             
@@ -1414,7 +1416,7 @@
             
             clearSelection();
             renderSchedule();
-            showNotification(`Opdateret ${count} vagter til: ${selectedShift}`);
+            showNotification('Opdateret ' + count + ' vagter til: ' + selectedShift);
         }
 
         function clearSelectedCells() {
